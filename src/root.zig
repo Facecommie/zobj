@@ -2,19 +2,16 @@ const std = @import("std");
 
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
-pub fn loadObj(allocator: std.mem.Allocator, filename: []const u8) !ObjContents {
-    return try ObjContents.load(allocator, filename);
+pub fn loadObj(allocator: std.mem.Allocator, file: std.fs.File) !ObjContents {
+    return try ObjContents.load(allocator, file);
 }
 
 // Higher level file functions.
 pub fn loadFileAlloc(
     allocator: std.mem.Allocator,
-    filename: []const u8,
+    file: std.fs.File,
     comptime alignment: std.mem.Alignment,
 ) ![]const u8 {
-    const file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
-    defer file.close();
-
     const stat = try file.stat();
     const filesize = stat.size;
 
@@ -28,31 +25,40 @@ pub fn loadFileAlloc(
     return buffer;
 }
 
-pub const ObjVec = struct {
-    x: f32,
-    y: f32,
-    z: f32,
-};
+pub const Vec3 = @Vector(3, f32);
 
-pub const ObjVec2 = struct {
-    x: f32,
-    y: f32,
-};
+pub const Vec2 = @Vector(2, f32);
 
-pub const ObjColor = struct {
+pub const Color = struct {
     r: f32,
     g: f32,
     b: f32,
     a: f32,
 };
 
+pub const Face = struct {
+    vertex: [4]u32,
+    texture: [4]u32,
+    normal: [4]u32,
+    count: u32,
+
+    pub fn init() Face {
+        return .{
+            .vertex = .{ 0, 0, 0, 0 },
+            .texture = .{ 0, 0, 0, 0 },
+            .normal = .{ 0, 0, 0, 0 },
+            .count = 0,
+        };
+    }
+};
+
 pub const ObjMesh = struct {
     object_name: []u8,
-    v_positions: ArrayListUnmanaged(ObjVec) = .{},
-    v_colors: ArrayListUnmanaged(ObjColor) = .{},
-    v_normals: ArrayListUnmanaged(ObjVec) = .{},
-    v_uvs: ArrayListUnmanaged(ObjVec2) = .{},
-    v_faces: ArrayListUnmanaged(ObjFace) = .{},
+    v_positions: ArrayListUnmanaged(Vec3) = .{},
+    v_colors: ArrayListUnmanaged(Color) = .{},
+    v_normals: ArrayListUnmanaged(Vec3) = .{},
+    v_uvs: ArrayListUnmanaged(Vec2) = .{},
+    v_faces: ArrayListUnmanaged(Face) = .{},
     allocator: std.mem.Allocator,
 
     pub fn validate_mesh(self: ObjMesh) !void {
@@ -109,22 +115,6 @@ pub const ObjMesh = struct {
     }
 };
 
-pub const ObjFace = struct {
-    vertex: [4]u32,
-    texture: [4]u32,
-    normal: [4]u32,
-    count: u32,
-
-    pub fn init() ObjFace {
-        return .{
-            .vertex = .{ 0, 0, 0, 0 },
-            .texture = .{ 0, 0, 0, 0 },
-            .normal = .{ 0, 0, 0, 0 },
-            .count = 0,
-        };
-    }
-};
-
 const ResultType = enum {
     vertex,
     color,
@@ -137,26 +127,26 @@ const ResultType = enum {
 };
 
 const LineParseResult = union(ResultType) {
-    vertex: ObjVec,
-    color: ObjColor,
-    normal: ObjVec,
-    face: ObjFace,
+    vertex: Vec3,
+    color: Color,
+    normal: Vec3,
+    face: Face,
     object: []const u8,
     group: []const u8,
     comment: []const u8,
-    texture: ObjVec2,
+    texture: Vec2,
 };
 
-fn iterIntoVec2(iter: anytype) !ObjVec2 {
-    var vec: ObjVec2 = undefined;
+fn iterIntoVec2(iter: anytype) !Vec2 {
+    var vec: Vec2 = undefined;
     var next: u32 = 0;
     while (iter.next()) |tok| {
         switch (next) {
             0 => {
-                vec.x = try std.fmt.parseFloat(f32, tok);
+                vec[0] = try std.fmt.parseFloat(f32, tok);
             },
             1 => {
-                vec.y = try std.fmt.parseFloat(f32, tok);
+                vec[1] = try std.fmt.parseFloat(f32, tok);
             },
             else => {
                 return error.UnexpectedVectorPosition;
@@ -168,19 +158,19 @@ fn iterIntoVec2(iter: anytype) !ObjVec2 {
     return vec;
 }
 
-fn iterIntoVec3(iter: anytype) !ObjVec {
-    var vec: ObjVec = undefined;
+fn iterIntoVec3(iter: anytype) !Vec3 {
+    var vec: Vec3 = undefined;
     var next: u32 = 0;
     while (iter.next()) |tok| {
         switch (next) {
             0 => {
-                vec.x = try std.fmt.parseFloat(f32, tok);
+                vec[0] = try std.fmt.parseFloat(f32, tok);
             },
             1 => {
-                vec.y = try std.fmt.parseFloat(f32, tok);
+                vec[1] = try std.fmt.parseFloat(f32, tok);
             },
             2 => {
-                vec.z = try std.fmt.parseFloat(f32, tok);
+                vec[2] = try std.fmt.parseFloat(f32, tok);
             },
             else => {
                 return error.UnexpectedVectorPosition;
@@ -192,8 +182,8 @@ fn iterIntoVec3(iter: anytype) !ObjVec {
     return vec;
 }
 
-pub fn toksIntoFace(toks: anytype) !ObjFace {
-    var rv = ObjFace.init();
+pub fn toksIntoFace(toks: anytype) !Face {
+    var rv = Face.init();
     var count: u32 = 0;
     while (toks.next()) |tok| {
         if (tok.len == 0)
@@ -378,14 +368,14 @@ pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8, .any) 
 const ObjContents = struct {
     meshes: std.ArrayList(ObjMesh),
 
-    pub fn load(allocator: std.mem.Allocator, fileName: []const u8) !ObjContents {
+    pub fn load(allocator: std.mem.Allocator, file: std.fs.File) !ObjContents {
         var self = ObjContents{
             .meshes = std.ArrayList(ObjMesh).init(allocator),
         };
 
         var mesh = try ObjMesh.init("root", allocator);
 
-        const file_contents = try loadFileAlloc(allocator, fileName, std.mem.Alignment.@"1");
+        const file_contents = try loadFileAlloc(allocator, file, std.mem.Alignment.@"1");
         defer allocator.free(file_contents);
         var lines = fileIntoLines(file_contents);
 
