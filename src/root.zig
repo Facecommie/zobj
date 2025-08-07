@@ -2,16 +2,18 @@ const std = @import("std");
 
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
-pub fn loadObj(allocator: std.mem.Allocator, file: std.fs.File) !ObjContents {
-    return try ObjContents.load(allocator, file);
+pub fn loadObj(allocator: std.mem.Allocator, filename: []const u8) !ObjContents {
+    return try ObjContents.load(allocator, filename);
 }
 
 // Higher level file functions.
 pub fn loadFileAlloc(
     allocator: std.mem.Allocator,
-    file: std.fs.File,
+    filename: []const u8,
     comptime alignment: std.mem.Alignment,
 ) ![]const u8 {
+    const file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
+    defer file.close();
     const stat = try file.stat();
     const filesize = stat.size;
 
@@ -368,14 +370,14 @@ pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8, .any) 
 const ObjContents = struct {
     meshes: std.ArrayList(ObjMesh),
 
-    pub fn load(allocator: std.mem.Allocator, file: std.fs.File) !ObjContents {
+    pub fn load(allocator: std.mem.Allocator, filename: []const u8) !ObjContents {
         var self = ObjContents{
             .meshes = std.ArrayList(ObjMesh).init(allocator),
         };
 
         var mesh = try ObjMesh.init("root", allocator);
 
-        const file_contents = try loadFileAlloc(allocator, file, std.mem.Alignment.@"1");
+        const file_contents = try loadFileAlloc(allocator, filename, std.mem.Alignment.@"1");
         defer allocator.free(file_contents);
         var lines = fileIntoLines(file_contents);
 
