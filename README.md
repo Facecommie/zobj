@@ -7,6 +7,13 @@ This was very rapidly written to provide a simple interface for loading `.obj` f
 At this time I make no garauntees on correctness or performance, will eventually support all .obj and .mtl 
 directives.
 
+```zig
+const obj_loader = @import("path/to/obj_loader.zig");
+
+var contents: ObjContents = obj_loader.loadObj("suzanne.obj", your.favorite.allocator);
+defer contents.deinit();
+```
+
 To load an obj, 
 
 ```zig
@@ -79,4 +86,5 @@ pub const ObjFace = struct {
     count: u32,
 };
 ```
+
 
