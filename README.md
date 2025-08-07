@@ -20,7 +20,7 @@ To load an obj,
 ```zig
 const obj_loader = @import("path/to/obj_loader.zig");
 
-var contents: ObjContents = obj_loader.loadObj("suzanne.obj", your.favorite.allocator);
+var contents: ObjContents = obj_loader.loadObj(your.favorite.allocator, "suzanne.obj");
 defer contents.deinit();
 ```
 
@@ -87,6 +87,7 @@ pub const ObjFace = struct {
     count: u32,
 };
 ```
+
 
 
 
