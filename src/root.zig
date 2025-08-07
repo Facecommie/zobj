@@ -2,8 +2,8 @@ const std = @import("std");
 
 const ArrayListUnmanaged = std.ArrayListUnmanaged;
 
-pub fn loadObj(filename: []const u8, allocator: std.mem.Allocator) !ObjContents {
-    return try ObjContents.load(filename, allocator);
+pub fn loadObj(allocator: std.mem.Allocator, filename: []const u8) !ObjContents {
+    return try ObjContents.load(allocator, filename);
 }
 
 // Higher level file functions.
