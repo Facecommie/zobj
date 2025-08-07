@@ -7,11 +7,12 @@ This was very rapidly written to provide a simple interface for loading `.obj` f
 At this time I make no garauntees on correctness or performance, will eventually support all .obj and .mtl 
 directives.
 
-```zig
-const obj_loader = @import("path/to/obj_loader.zig");
+add this to your build.zig and the .path to your build.zig.zon
 
-var contents: ObjContents = obj_loader.loadObj("suzanne.obj", your.favorite.allocator);
-defer contents.deinit();
+```zig
+const zobj_mod = b.dependency("zobj", .{}).module("root");
+exe.root_module.addImport("obj", zobj_mod);
+lib.addImport("obj", zobj_mod);
 ```
 
 To load an obj, 
@@ -86,5 +87,6 @@ pub const ObjFace = struct {
     count: u32,
 };
 ```
+
 
 
