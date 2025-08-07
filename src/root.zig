@@ -7,11 +7,24 @@ pub fn loadObj(filename: []const u8, allocator: std.mem.Allocator) !ObjContents 
 }
 
 // Higher level file functions.
-pub fn loadFileAlloc(filename: []const u8, comptime alignment: usize, allocator: std.mem.Allocator) ![]const u8 {
-    var file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
-    const filesize = (try file.stat()).size;
-    const buffer: []u8 = try allocator.allocAdvanced(u8, @intCast(alignment), @intCast(filesize), .exact);
-    try file.reader().readNoEof(buffer);
+pub fn loadFileAlloc(
+    filename: []const u8,
+    comptime alignment: std.mem.Alignment,
+    allocator: std.mem.Allocator,
+) ![]const u8 {
+    const file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
+    defer file.close();
+
+    const stat = try file.stat();
+    const filesize = stat.size;
+
+    const buffer = try allocator.alignedAlloc(u8, alignment, filesize);
+    errdefer allocator.free(buffer);
+
+    const bytesRead = try file.readAll(buffer);
+    if (bytesRead != filesize)
+        return error.UnexpectedEndOfFile;
+
     return buffer;
 }
 
@@ -70,7 +83,7 @@ pub const ObjMesh = struct {
     pub fn init(_object_name: []const u8, allocator: std.mem.Allocator) !ObjMesh {
         const object_name = try allocator.alloc(u8, _object_name.len);
 
-        std.mem.copy(u8, object_name, _object_name);
+        @memmove(object_name, _object_name);
 
         const self = ObjMesh{
             .object_name = object_name,
@@ -83,7 +96,7 @@ pub const ObjMesh = struct {
     pub fn setName(self: *ObjMesh, name: []const u8) !void {
         self.allocator.free(self.object_name);
         self.object_name = try self.allocator.alloc(u8, name.len);
-        std.mem.copy(u8, self.object_name, name);
+        @memmove(self.object_name, name);
     }
 
     pub fn deinit(self: *ObjMesh) void {
@@ -185,7 +198,7 @@ pub fn toksIntoFace(toks: anytype) !ObjFace {
     while (toks.next()) |tok| {
         if (tok.len == 0)
             continue;
-        var face_desc = std.mem.tokenize(u8, tok, "/");
+        var face_desc = std.mem.tokenizeAny(u8, tok, "/");
         var ic: u32 = 0; // ic= inner_count
         if (count >= 4) {
             continue;
@@ -228,7 +241,7 @@ fn parse_line(lineIn: []const u8, allocator: std.mem.Allocator) !LineParseResult
         line = line[1..line.len];
     }
 
-    var tokens = std.mem.tokenize(u8, line, " ");
+    var tokens = std.mem.tokenizeAny(u8, line, " ");
     const first = tokens.next().?;
 
     if (line[0] == '#') {
@@ -343,23 +356,23 @@ test "parse_vector" {
     }
 }
 
-pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8) {
+pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8, .any) {
     // find a \n and see if it has \r\n
     var index: u32 = 0;
     while (index < file_contents.len) : (index += 1) {
         if (file_contents[index] == '\n') {
             if (index > 0) {
                 if (file_contents[index - 1] == '\r') {
-                    return std.mem.split(u8, file_contents, "\r\n");
+                    return std.mem.splitAny(u8, file_contents, "\r\n");
                 } else {
-                    return std.mem.split(u8, file_contents, "\n");
+                    return std.mem.splitAny(u8, file_contents, "\n");
                 }
             } else {
-                return std.mem.split(u8, file_contents, "\n");
+                return std.mem.splitAny(u8, file_contents, "\n");
             }
         }
     }
-    return std.mem.split(u8, file_contents, "\n");
+    return std.mem.splitAny(u8, file_contents, "\n");
 }
 
 const ObjContents = struct {
@@ -372,7 +385,7 @@ const ObjContents = struct {
 
         var mesh = try ObjMesh.init("root", allocator);
 
-        const file_contents = try loadFileAlloc(fileName, 1, allocator);
+        const file_contents = try loadFileAlloc(fileName, std.mem.Alignment.@"1", allocator);
         defer allocator.free(file_contents);
         var lines = fileIntoLines(file_contents);
 
@@ -417,7 +430,7 @@ const ObjContents = struct {
 };
 
 test "load_monkey_full" {
-    const monkey_obj_path = "./test/monkey.obj";
+    const monkey_obj_path = "test/monkey.obj";
     var obj_contents = try ObjContents.load(monkey_obj_path, std.testing.allocator);
     defer obj_contents.deinit();
     try std.testing.expect(obj_contents.meshes.items.len == 1);
@@ -425,11 +438,11 @@ test "load_monkey_full" {
 }
 
 test "parse_monkey" {
-    const monkey_obj_path = "./test/monkey.obj";
-    const monkey_mtl_path = "./test/monkey.mtl";
+    const monkey_obj_path = "test/monkey.obj";
+    const monkey_mtl_path = "test/monkey.mtl";
     _ = monkey_mtl_path;
 
-    const file_contents = try loadFileAlloc(monkey_obj_path, 1, std.testing.allocator);
+    const file_contents = try loadFileAlloc(monkey_obj_path, std.mem.Alignment.@"1", std.testing.allocator);
     defer std.testing.allocator.free(file_contents);
     var lines = fileIntoLines(file_contents);
     var count: u32 = 0;
