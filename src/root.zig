@@ -8,9 +8,9 @@ pub fn loadObj(filename: []const u8, allocator: std.mem.Allocator) !ObjContents 
 
 // Higher level file functions.
 pub fn loadFileAlloc(
+    allocator: std.mem.Allocator,
     filename: []const u8,
     comptime alignment: std.mem.Alignment,
-    allocator: std.mem.Allocator,
 ) ![]const u8 {
     const file = try std.fs.cwd().openFile(filename, .{ .mode = .read_only });
     defer file.close();
@@ -378,14 +378,14 @@ pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8, .any) 
 const ObjContents = struct {
     meshes: std.ArrayList(ObjMesh),
 
-    pub fn load(fileName: []const u8, allocator: std.mem.Allocator) !ObjContents {
+    pub fn load(allocator: std.mem.Allocator, fileName: []const u8) !ObjContents {
         var self = ObjContents{
             .meshes = std.ArrayList(ObjMesh).init(allocator),
         };
 
         var mesh = try ObjMesh.init("root", allocator);
 
-        const file_contents = try loadFileAlloc(fileName, std.mem.Alignment.@"1", allocator);
+        const file_contents = try loadFileAlloc(allocator, fileName, std.mem.Alignment.@"1");
         defer allocator.free(file_contents);
         var lines = fileIntoLines(file_contents);
 
@@ -431,7 +431,7 @@ const ObjContents = struct {
 
 test "load_monkey_full" {
     const monkey_obj_path = "test/monkey.obj";
-    var obj_contents = try ObjContents.load(monkey_obj_path, std.testing.allocator);
+    var obj_contents = try ObjContents.load(std.testing.allocator, monkey_obj_path);
     defer obj_contents.deinit();
     try std.testing.expect(obj_contents.meshes.items.len == 1);
     obj_contents.meshes.items[0].print_stats();
@@ -442,7 +442,7 @@ test "parse_monkey" {
     const monkey_mtl_path = "test/monkey.mtl";
     _ = monkey_mtl_path;
 
-    const file_contents = try loadFileAlloc(monkey_obj_path, std.mem.Alignment.@"1", std.testing.allocator);
+    const file_contents = try loadFileAlloc(std.testing.allocator, monkey_obj_path, std.mem.Alignment.@"1");
     defer std.testing.allocator.free(file_contents);
     var lines = fileIntoLines(file_contents);
     var count: u32 = 0;
