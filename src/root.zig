@@ -223,7 +223,7 @@ pub fn toksIntoFace(toks: anytype) !Face {
     return rv;
 }
 
-fn parse_line(lineIn: []const u8, allocator: std.mem.Allocator) !LineParseResult {
+fn parseLine(lineIn: []const u8, allocator: std.mem.Allocator) !LineParseResult {
     _ = allocator;
     var line: []const u8 = lineIn;
 
@@ -297,57 +297,6 @@ fn parse_line(lineIn: []const u8, allocator: std.mem.Allocator) !LineParseResult
     return error.NotImplemented;
 }
 
-test "parse_vector" {
-    {
-        const result = try parse_line("v 0.437500 0.765625 -0.164063", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .vertex);
-    }
-
-    {
-        const result = try parse_line("vn 0.437500 0.765625 -0.164063", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .normal);
-    }
-
-    {
-        const result = try parse_line("f 47//1 1//1 3//1 45//1", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .face);
-    }
-
-    {
-        const result = try parse_line("f 47//1 1//1 3//1 ", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .face);
-    }
-
-    {
-        const result = try parse_line("o Suzanne", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .object);
-    }
-
-    {
-        const result = try parse_line("g Suzanne", std.testing.allocator);
-        std.debug.print("\n", .{});
-        std.debug.print("{any}\n", .{result});
-        try std.testing.expect(result == .group);
-    }
-
-    {
-        const result = try parse_line("  # this is a comment ", std.testing.allocator);
-        std.debug.print("\n", .{});
-        try std.testing.expect(result == .comment);
-        std.debug.print("{s}\n", .{result.comment});
-    }
-}
-
 pub fn fileIntoLines(file_contents: []const u8) std.mem.SplitIterator(u8, .any) {
     // find a \n and see if it has \r\n
     var index: u32 = 0;
@@ -382,7 +331,7 @@ const ObjContents = struct {
         var lines = fileIntoLines(file_contents);
 
         while (lines.next()) |line| {
-            const result = parse_line(line, allocator) catch continue;
+            const result = parseLine(line, allocator) catch continue;
 
             if (result == .object) {
                 if (mesh.v_positions.items.len > 0) {
@@ -421,18 +370,74 @@ const ObjContents = struct {
     }
 };
 
+test "parse_vector" {
+    {
+        const result = try parseLine("v 0.437500 0.765625 -0.164063", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .vertex);
+    }
+
+    {
+        const result = try parseLine("vn 0.437500 0.765625 -0.164063", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .normal);
+    }
+
+    {
+        const result = try parseLine("f 47//1 1//1 3//1 45//1", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .face);
+    }
+
+    {
+        const result = try parseLine("f 47//1 1//1 3//1 ", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .face);
+    }
+
+    {
+        const result = try parseLine("o Suzanne", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .object);
+    }
+
+    {
+        const result = try parseLine("g Suzanne", std.testing.allocator);
+        std.debug.print("\n", .{});
+        std.debug.print("{any}\n", .{result});
+        try std.testing.expect(result == .group);
+    }
+
+    {
+        const result = try parseLine("  # this is a comment ", std.testing.allocator);
+        std.debug.print("\n", .{});
+        try std.testing.expect(result == .comment);
+        std.debug.print("{s}\n", .{result.comment});
+    }
+}
+
 test "load_monkey_full" {
-    const monkey_obj_path = "test/monkey.obj";
+    const monkey_obj_path = "src/Assets/Cube.obj";
     var obj_contents = try ObjContents.load(std.testing.allocator, monkey_obj_path);
     defer obj_contents.deinit();
     try std.testing.expect(obj_contents.meshes.items.len == 1);
     obj_contents.meshes.items[0].print_stats();
 }
 
+test "cube" {
+    var obj = try ObjContents.load(std.testing.allocator, "delete.obj");
+    defer obj.deinit();
+
+    obj.meshes.items[0].print_stats();
+}
+
 test "parse_monkey" {
-    const monkey_obj_path = "test/monkey.obj";
-    const monkey_mtl_path = "test/monkey.mtl";
-    _ = monkey_mtl_path;
+    const monkey_obj_path = "src/Assets/Cube.obj";
 
     const file_contents = try loadFileAlloc(std.testing.allocator, monkey_obj_path, std.mem.Alignment.@"1");
     defer std.testing.allocator.free(file_contents);
@@ -444,7 +449,7 @@ test "parse_monkey" {
     var texture_count: u32 = 0;
 
     while (lines.next()) |line| {
-        const result = parse_line(line, std.testing.allocator) catch {
+        const result = parseLine(line, std.testing.allocator) catch {
             continue;
         };
         if (result == .vertex)
