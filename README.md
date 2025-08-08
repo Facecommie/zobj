@@ -1,5 +1,5 @@
 # obj_loader - a zig obj file loader
-
+Doesnt work for now, the original repo didnt and im trying my best with minimal experience.
 This was very rapidly written to provide a simple interface for loading `.obj` files in zig.
 
 ![Suzanne](https://peterino.com/Monkey2.png)
@@ -87,6 +87,7 @@ pub const ObjFace = struct {
     count: u32,
 };
 ```
+
 
 
 
