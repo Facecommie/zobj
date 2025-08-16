@@ -6,6 +6,10 @@ pub fn loadObj(allocator: std.mem.Allocator, filename: []const u8) !ObjContents 
     return try ObjContents.load(allocator, filename);
 }
 
+pub fn loadObjEmbed(allocator: std.mem.Allocator, file_contents: []const u8) !ObjContents {
+    return try ObjContents.loadEmbed(allocator, file_contents);
+}
+
 // Higher level file functions.
 pub fn loadFileAlloc(
     allocator: std.mem.Allocator,
@@ -328,6 +332,47 @@ const ObjContents = struct {
 
         const file_contents = try loadFileAlloc(allocator, filename, std.mem.Alignment.@"1");
         defer allocator.free(file_contents);
+        var lines = fileIntoLines(file_contents);
+
+        while (lines.next()) |line| {
+            const result = parseLine(line, allocator) catch continue;
+
+            if (result == .object) {
+                if (mesh.v_positions.items.len > 0) {
+                    try self.meshes.append(mesh);
+                    mesh = try ObjMesh.init(result.object, allocator);
+                } else {
+                    try mesh.setName(result.object);
+                }
+            }
+
+            if (result == .vertex) {
+                try mesh.v_positions.append(mesh.allocator, result.vertex);
+            }
+
+            if (result == .normal) {
+                try mesh.v_normals.append(mesh.allocator, result.normal);
+            }
+
+            if (result == .face) {
+                try mesh.v_faces.append(mesh.allocator, result.face);
+            }
+
+            if (result == .texture) {
+                try mesh.v_uvs.append(mesh.allocator, result.texture);
+            }
+        }
+        try self.meshes.append(mesh);
+        return self;
+    }
+
+    pub fn loadEmbed(allocator: std.mem.Allocator, file_contents: []const u8) !ObjContents {
+        var self = ObjContents{
+            .meshes = std.ArrayList(ObjMesh).init(allocator),
+        };
+
+        var mesh = try ObjMesh.init("root", allocator);
+
         var lines = fileIntoLines(file_contents);
 
         while (lines.next()) |line| {
