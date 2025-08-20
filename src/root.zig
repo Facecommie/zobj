@@ -13,6 +13,8 @@ const ResultType = enum {
     normal,
     face,
     texture,
+    object,
+    group,
 };
 
 const LineParseResult = union(ResultType) {
@@ -21,6 +23,8 @@ const LineParseResult = union(ResultType) {
     normal: F32x3,
     face: Face,
     texture: F32x2,
+    object: []const u8,
+    group: []const u8,
 };
 
 const VectorError = error{
@@ -44,21 +48,14 @@ const Contents = struct {
         while (lines.next()) |line| {
             const result: LineParseResult = parseLine(line) catch continue;
 
-            if (result == .vertex) {
-                try mesh.positions.append(mesh.allocator, result.vertex);
-            }
-
-            if (result == .normal) {
-                try mesh.normals.append(mesh.allocator, result.normal);
-            }
-
-            if (result == .face) {
-                try mesh.faces.append(mesh.allocator, result.face);
-            }
-
-            if (result == .texture) {
-                try mesh.uvs.append(mesh.allocator, result.texture);
-            }
+            try switch (result) {
+                ResultType.vertex => try mesh.positions.append(mesh.allocator, result.vertex),
+                ResultType.color => try mesh.colors.append(mesh.allocator, result.color),
+                ResultType.normal => try mesh.normals.append(mesh.allocator, result.normal),
+                ResultType.face => try mesh.faces.append(mesh.allocator, result.face),
+                ResultType.texture => try mesh.uvs.append(mesh.allocator, result.texture),
+                else => error.ResultTypeNotSupported,
+            };
         }
         try meshes.append(mesh);
 
@@ -93,26 +90,18 @@ fn parseLine(lineIn: []const u8) !LineParseResult {
     }
 
     if (std.mem.eql(u8, "vt", first)) {
-        return LineParseResult{
-            .texture = try iterateIntoF32x2(&token_iterator),
-        };
+        return LineParseResult{ .texture = try iterateIntoF32x2(&token_iterator) };
     }
 
     if (std.mem.eql(u8, "vn", first)) {
-        return LineParseResult{
-            .normal = try iterateIntoF32x3(&token_iterator),
-        };
+        return LineParseResult{ .normal = try iterateIntoF32x3(&token_iterator) };
     }
 
     if (std.mem.eql(u8, "v", first)) {
-        return LineParseResult{
-            .vertex = try iterateIntoF32x3(&token_iterator),
-        };
+        return LineParseResult{ .vertex = try iterateIntoF32x3(&token_iterator) };
     }
     if (std.mem.eql(u8, "f", first)) {
-        return LineParseResult{
-            .face = try iterateIntoFace(&token_iterator),
-        };
+        return LineParseResult{ .face = try iterateIntoFace(&token_iterator) };
     }
 
     return error.NotImplemented;
@@ -168,22 +157,13 @@ pub fn iterateIntoFace(iterator: *std.mem.TokenIterator(u8, .any)) Face.Error!Fa
         while (face_iterator.next()) |prop| : (inner_count += 1) {
             switch (inner_count) {
                 0 => {
-                    face.vertex[count] = std.fmt.parseInt(u32, prop, 10) catch |err| {
-                        std.log.warn("Failed to parse to int, will silently cover it with 0, but check it out. Literal Error: {}", .{err});
-                        return Face.Error.InvalidIndex;
-                    };
+                    face.vertex[count] = std.fmt.parseInt(u32, prop, 10) catch return Face.Error.InvalidIndex;
                 },
                 1 => {
-                    face.texture[count] = std.fmt.parseInt(u32, prop, 10) catch |err| {
-                        std.log.warn("Failed to parse to int, will silently cover it with 0, but check it out. Literal Error: {}", .{err});
-                        return Face.Error.InvalidIndex;
-                    };
+                    face.texture[count] = std.fmt.parseInt(u32, prop, 10) catch return Face.Error.InvalidIndex;
                 },
                 2 => {
-                    face.normal[count] = std.fmt.parseInt(u32, prop, 10) catch |err| {
-                        std.log.warn("Failed to parse to int, will silently cover it with 0, but check it out. Literal Error: {}", .{err});
-                        return Face.Error.InvalidIndex;
-                    };
+                    face.normal[count] = std.fmt.parseInt(u32, prop, 10) catch return Face.Error.InvalidIndex;
                 },
                 else => return Face.Error.TooManyFaceProperties,
             }
