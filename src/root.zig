@@ -36,10 +36,11 @@ pub fn load(allocator: std.mem.Allocator, file_contents: []const u8) !Contents {
 }
 
 const Contents = struct {
+    allocator: std.mem.Allocator,
     meshes: std.ArrayList(Mesh),
 
     pub fn init(allocator: std.mem.Allocator, file_contents: []const u8) !Contents {
-        var meshes = std.ArrayList(Mesh).init(allocator);
+        var meshes = std.ArrayList(Mesh).empty;
 
         var mesh = try Mesh.init(allocator);
 
@@ -57,9 +58,10 @@ const Contents = struct {
                 else => error.ResultTypeNotSupported,
             };
         }
-        try meshes.append(mesh);
+        try meshes.append(allocator, mesh);
 
         const self = Contents{
+            .allocator = allocator,
             .meshes = meshes,
         };
         return self;
@@ -69,7 +71,7 @@ const Contents = struct {
         for (self.meshes.items) |*mesh| {
             mesh.deinit();
         }
-        self.meshes.deinit();
+        self.meshes.deinit(self.allocator);
     }
 };
 
